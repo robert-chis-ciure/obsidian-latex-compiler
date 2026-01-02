@@ -21,6 +21,32 @@ The MVP (Phase 1) is functionally complete but has **critical gaps** identified 
 
 ---
 
+## Repo Scan: Remaining Work (based on current tree)
+
+This section captures what is still missing after reviewing the repository.
+
+### P0 (must fix before release)
+- Remove `shell: true` from latexmk spawns; validate args and stop quoting in args once `shell: false` is used.
+- Implement process-tree cancellation with a SIGKILL fallback (latexmk child processes persist today).
+- Add integration/smoke tests (current suite only covers parser unit tests; no compile coverage).
+- Add `-file-line-error` to latexmk args to improve file/line accuracy in diagnostics.
+- Remove unused `pdfjs-dist` dependency or wire it up (PDF preview is iframe-based today).
+
+### P1 (next sprint)
+- Add `-synctex=1` and either `-cd` or compile with `cwd` set to the main file's directory.
+- Change clean command to use `latexmk -C` instead of raw `fs.rmSync`.
+- Add "Show Build Log" command to open `.latex-out/build.log`.
+- Implement watch mode with vault events + debounce; ignore output dir to prevent loops.
+
+### P2 (later)
+- Add per-project config file support (`.obsidian-latex.json`) and a Projects sidebar view.
+- Expand parser patterns for BibTeX/Biber and add raw-log fallback when parsing fails.
+
+### Already resolved (no longer remaining)
+- PATH delimiter handling uses `getPathSeparator()` in `src/utils/platform.ts`.
+
+---
+
 ## Part 1: Critical Issues (P0 - Fix Before Release)
 
 ### 1.1 Security: Shell Injection Risk
