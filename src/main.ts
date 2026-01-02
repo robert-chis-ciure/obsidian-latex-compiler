@@ -264,8 +264,8 @@ export default class LaTeXCompilerPlugin extends Plugin {
         return;
       }
 
-      // Create default config
-      config = this.projectManager.createDefaultConfig(absolutePath, entrypoints[0]);
+      // Create default config (loads from .obsidian-latex.json if present)
+      config = await this.projectManager.createDefaultConfig(absolutePath, entrypoints[0]);
 
       // Show config modal
       new ProjectConfigModal(
@@ -477,8 +477,8 @@ export default class LaTeXCompilerPlugin extends Plugin {
         return;
       }
 
-      // Create default config
-      config = this.projectManager.createDefaultConfig(absolutePath, entrypoints[0]);
+      // Create default config (loads from .obsidian-latex.json if present)
+      config = await this.projectManager.createDefaultConfig(absolutePath, entrypoints[0]);
 
       // Show config modal
       new ProjectConfigModal(

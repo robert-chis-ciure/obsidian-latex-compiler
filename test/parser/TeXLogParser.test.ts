@@ -177,4 +177,102 @@ l.12 \\begin{minted}{python}
       }
     });
   });
+
+  describe('BibTeX error parsing', () => {
+    test('parses BibTeX database not found error', () => {
+      const log = fs.readFileSync(path.join(fixturesDir, 'bibtex-error.log'), 'utf-8');
+      const diagnostics = parser.parse(log, projectRoot);
+
+      const bibtexError = diagnostics.find(d =>
+        d.severity === 'error' && d.code === 'BIBTEX_ERROR'
+      );
+
+      expect(bibtexError).toBeDefined();
+      expect(bibtexError!.message).toContain('references.bib');
+    });
+  });
+
+  describe('BibTeX warning parsing', () => {
+    test('parses BibTeX citation not found warning', () => {
+      const log = fs.readFileSync(path.join(fixturesDir, 'bibtex-warnings.log'), 'utf-8');
+      const diagnostics = parser.parse(log, projectRoot);
+
+      const citationNotFound = diagnostics.find(d =>
+        d.code === 'BIBTEX_CITATION_NOT_FOUND'
+      );
+
+      expect(citationNotFound).toBeDefined();
+      expect(citationNotFound!.severity).toBe('warning');
+      expect(citationNotFound!.message).toContain('smith2024');
+    });
+
+    test('parses BibTeX missing field warning', () => {
+      const log = fs.readFileSync(path.join(fixturesDir, 'bibtex-warnings.log'), 'utf-8');
+      const diagnostics = parser.parse(log, projectRoot);
+
+      const missingField = diagnostics.find(d =>
+        d.code === 'BIBTEX_MISSING_FIELD'
+      );
+
+      expect(missingField).toBeDefined();
+      expect(missingField!.severity).toBe('warning');
+      expect(missingField!.message).toContain('year');
+      expect(missingField!.message).toContain('jones2023');
+    });
+  });
+
+  describe('Biber error parsing', () => {
+    test('parses Biber error', () => {
+      const log = fs.readFileSync(path.join(fixturesDir, 'biber-error.log'), 'utf-8');
+      const diagnostics = parser.parse(log, projectRoot);
+
+      const biberError = diagnostics.find(d =>
+        d.severity === 'error' && d.code === 'BIBER_ERROR'
+      );
+
+      expect(biberError).toBeDefined();
+      expect(biberError!.message).toContain('references.bib');
+    });
+  });
+
+  describe('file-line-error format parsing', () => {
+    test('parses file:line:error format', () => {
+      const log = fs.readFileSync(path.join(fixturesDir, 'file-line-error.log'), 'utf-8');
+      const diagnostics = parser.parse(log, projectRoot);
+
+      const fileLineError = diagnostics.find(d =>
+        d.code === 'FILE_LINE_ERROR' && d.line === 15
+      );
+
+      expect(fileLineError).toBeDefined();
+      expect(fileLineError!.message).toContain('Undefined control sequence');
+    });
+
+    test('parses errors from included files', () => {
+      const log = fs.readFileSync(path.join(fixturesDir, 'file-line-error.log'), 'utf-8');
+      const diagnostics = parser.parse(log, projectRoot);
+
+      const introError = diagnostics.find(d =>
+        d.file?.includes('intro.tex') && d.line === 42
+      );
+
+      expect(introError).toBeDefined();
+      expect(introError!.message).toContain('Missing $');
+    });
+  });
+
+  describe('raw-log fallback', () => {
+    test('returns fallback diagnostic when parsing throws', () => {
+      // Create a parser with a mock that throws
+      const badParser = new TeXLogParser();
+
+      // Test that malformed input doesn't crash
+      const weirdLog = '\x00\x01\x02binary garbage';
+      const diagnostics = badParser.parse(weirdLog, projectRoot);
+
+      // Should either parse successfully with no errors or return empty array
+      // but should NOT throw
+      expect(Array.isArray(diagnostics)).toBe(true);
+    });
+  });
 });

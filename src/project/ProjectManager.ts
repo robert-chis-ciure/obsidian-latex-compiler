@@ -2,6 +2,7 @@ import { App, TFolder, TFile, Modal, Setting } from 'obsidian';
 import * as path from 'path';
 import * as fs from 'fs';
 import { LaTeXProjectConfig, LaTeXPluginSettings, TeXEngine } from '../types';
+import { ProjectConfigLoader, PROJECT_CONFIG_FILE } from './ProjectConfig';
 
 /**
  * Manages LaTeX project discovery and configuration
@@ -60,8 +61,86 @@ export class ProjectManager {
 
   /**
    * Create a new project configuration with defaults
+   * Checks for .obsidian-latex.json and .latexmkrc files
    */
-  createDefaultConfig(rootPath: string, mainFile = 'main.tex'): LaTeXProjectConfig {
+  async createDefaultConfig(rootPath: string, mainFile = 'main.tex'): Promise<LaTeXProjectConfig> {
+    // Check for per-project config file
+    const fileConfig = await ProjectConfigLoader.loadConfig(rootPath);
+
+    // Check for .latexmkrc file
+    const latexmkrcPath = this.detectLatexmkrc(rootPath);
+
+    // Merge with defaults
+    const config = ProjectConfigLoader.mergeWithDefaults(
+      rootPath,
+      fileConfig,
+      mainFile
+    );
+
+    // Add detected latexmkrc if not already specified
+    if (latexmkrcPath && !config.latexmkrcPath) {
+      config.latexmkrcPath = latexmkrcPath;
+    }
+
+    return config;
+  }
+
+  /**
+   * Load or create project configuration
+   * Prioritizes: .obsidian-latex.json > registered project > defaults
+   */
+  async loadProjectConfig(rootPath: string, defaultMainFile = 'main.tex'): Promise<LaTeXProjectConfig> {
+    // First check for config file
+    if (ProjectConfigLoader.hasConfigFile(rootPath)) {
+      return this.createDefaultConfig(rootPath, defaultMainFile);
+    }
+
+    // Then check registered projects
+    const registered = this.getProject(rootPath);
+    if (registered) {
+      return registered;
+    }
+
+    // Fall back to defaults
+    return this.createDefaultConfig(rootPath, defaultMainFile);
+  }
+
+  /**
+   * Save project configuration to file
+   */
+  async saveProjectConfigToFile(project: LaTeXProjectConfig): Promise<boolean> {
+    const fileConfig = ProjectConfigLoader.extractFileConfig(project);
+    return ProjectConfigLoader.saveConfig(project.rootPath, fileConfig);
+  }
+
+  /**
+   * Check if a project has a config file
+   */
+  hasConfigFile(rootPath: string): boolean {
+    return ProjectConfigLoader.hasConfigFile(rootPath);
+  }
+
+  /**
+   * Detect .latexmkrc file in project directory
+   */
+  private detectLatexmkrc(rootPath: string): string | undefined {
+    const possibleNames = ['.latexmkrc', 'latexmkrc'];
+
+    for (const name of possibleNames) {
+      const rcPath = path.join(rootPath, name);
+      if (fs.existsSync(rcPath)) {
+        return name; // Return relative path
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Create a new project configuration with defaults (sync version)
+   * @deprecated Use async createDefaultConfig instead
+   */
+  createDefaultConfigSync(rootPath: string, mainFile = 'main.tex'): LaTeXProjectConfig {
     return {
       rootPath,
       mainFile,

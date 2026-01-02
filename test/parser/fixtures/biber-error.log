@@ -1,0 +1,5 @@
+INFO - This is Biber 2.19
+INFO - Logfile is 'main.blg'
+INFO - Reading 'main.bcf'
+ERROR - Cannot find 'references.bib'!
+INFO - ERRORS: 1

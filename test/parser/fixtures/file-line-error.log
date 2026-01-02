@@ -1,0 +1,6 @@
+./main.tex:15: Undefined control sequence.
+l.15 \badcommand
+                 
+./chapters/intro.tex:42: Missing $ inserted.
+l.42 The value is x
+                   _1

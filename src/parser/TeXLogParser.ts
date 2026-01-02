@@ -20,6 +20,26 @@ export class TeXLogParser {
    * @returns Array of parsed diagnostics
    */
   parse(logContent: string, projectRoot: string): Diagnostic[] {
+    try {
+      return this.parseStructured(logContent, projectRoot);
+    } catch (error) {
+      // Fallback: return single diagnostic with raw log
+      console.error('TeX log parsing failed:', error);
+      return [{
+        severity: 'error',
+        file: 'unknown',
+        line: null,
+        message: 'Log parsing failed - showing raw output',
+        rawText: logContent.slice(0, 2000),
+        code: 'PARSE_FAILED',
+      }];
+    }
+  }
+
+  /**
+   * Parse structured diagnostics from log content
+   */
+  private parseStructured(logContent: string, projectRoot: string): Diagnostic[] {
     const lines = logContent.split('\n');
     const diagnostics: Diagnostic[] = [];
     const fileStack: string[] = [];
@@ -97,6 +117,103 @@ export class TeXLogParser {
           message: `Font: ${fontWarningMatch[1]}`,
           rawText: line,
           code: 'FONT_WARNING',
+        });
+        i++;
+        continue;
+      }
+
+      // Check for file:line:error format (from -file-line-error flag)
+      const fileLineErrorMatch = line.match(patterns.FILE_LINE_ERROR);
+      if (fileLineErrorMatch) {
+        const filePath = fileLineErrorMatch[1];
+        const lineNum = parseInt(fileLineErrorMatch[2], 10);
+        const message = fileLineErrorMatch[3];
+
+        // Skip if this looks like a path rather than an error
+        if (message && !filePath.includes(' ')) {
+          diagnostics.push({
+            severity: 'error',
+            file: this.resolvePath(filePath, projectRoot) || filePath,
+            line: lineNum,
+            message: message.trim(),
+            rawText: line,
+            code: 'FILE_LINE_ERROR',
+          });
+          i++;
+          continue;
+        }
+      }
+
+      // Check for BibTeX citation not found
+      const bibtexCitationMatch = line.match(patterns.BIBTEX_CITATION_NOT_FOUND);
+      if (bibtexCitationMatch) {
+        diagnostics.push({
+          severity: 'warning',
+          file: this.getCurrentFile(fileStack),
+          line: null,
+          message: `BibTeX: Citation '${bibtexCitationMatch[1]}' not found in database`,
+          rawText: line,
+          code: 'BIBTEX_CITATION_NOT_FOUND',
+        });
+        i++;
+        continue;
+      }
+
+      // Check for BibTeX missing field
+      const bibtexMissingFieldMatch = line.match(patterns.BIBTEX_MISSING_FIELD);
+      if (bibtexMissingFieldMatch) {
+        diagnostics.push({
+          severity: 'warning',
+          file: this.getCurrentFile(fileStack),
+          line: null,
+          message: `BibTeX: Empty ${bibtexMissingFieldMatch[1]} field in '${bibtexMissingFieldMatch[2]}'`,
+          rawText: line,
+          code: 'BIBTEX_MISSING_FIELD',
+        });
+        i++;
+        continue;
+      }
+
+      // Check for BibTeX file error
+      const bibtexErrorMatch = line.match(patterns.BIBTEX_ERROR);
+      if (bibtexErrorMatch) {
+        diagnostics.push({
+          severity: 'error',
+          file: this.getCurrentFile(fileStack),
+          line: null,
+          message: `BibTeX: Couldn't open ${bibtexErrorMatch[1]}`,
+          rawText: line,
+          code: 'BIBTEX_ERROR',
+        });
+        i++;
+        continue;
+      }
+
+      // Check for Biber error
+      const biberErrorMatch = line.match(patterns.BIBER_ERROR);
+      if (biberErrorMatch) {
+        diagnostics.push({
+          severity: 'error',
+          file: this.getCurrentFile(fileStack),
+          line: null,
+          message: `Biber: ${biberErrorMatch[1]}`,
+          rawText: line,
+          code: 'BIBER_ERROR',
+        });
+        i++;
+        continue;
+      }
+
+      // Check for Biber warning
+      const biberWarningMatch = line.match(patterns.BIBER_WARNING);
+      if (biberWarningMatch) {
+        diagnostics.push({
+          severity: 'warning',
+          file: this.getCurrentFile(fileStack),
+          line: null,
+          message: `Biber: ${biberWarningMatch[1]}`,
+          rawText: line,
+          code: 'BIBER_WARNING',
         });
         i++;
         continue;

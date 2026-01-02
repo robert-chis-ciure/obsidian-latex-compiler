@@ -62,8 +62,29 @@ export const LATEXMK_RUN = /^Latexmk:\s+applying\s+rule\s+'([^']+)'/;
 /** Latexmk success indicator */
 export const LATEXMK_SUCCESS = /^Latexmk:\s+All\s+targets\s+\(.+\)\s+are\s+up-to-date/;
 
-/** BibTeX/Biber error */
+/** BibTeX/Biber error - file not found */
 export const BIBTEX_ERROR = /^I\s+couldn't\s+open\s+(?:file\s+name|database\s+file)\s+(.+)/;
 
 /** Citation not found in .bib */
 export const BIBTEX_CITATION_NOT_FOUND = /^Warning--I\s+didn't\s+find\s+a\s+database\s+entry\s+for\s+"([^"]+)"/;
+
+/** BibTeX generic warning */
+export const BIBTEX_WARNING = /^Warning--(.+)$/;
+
+/** Biber error */
+export const BIBER_ERROR = /^ERROR\s+-\s+(.+)$/;
+
+/** Biber warning */
+export const BIBER_WARNING = /^WARN\s+-\s+(.+)$/;
+
+/** Biber info */
+export const BIBER_INFO = /^INFO\s+-\s+(.+)$/;
+
+/** BibTeX database error - missing field */
+export const BIBTEX_MISSING_FIELD = /^Warning--empty\s+(\w+)\s+in\s+(.+)$/;
+
+/** BibTeX repeated entry */
+export const BIBTEX_REPEATED_ENTRY = /^Warning--I'm\s+ignoring\s+.+'s\s+extra\s+"([^"]+)"\s+field/;
+
+/** File line error format (with -file-line-error flag) */
+export const FILE_LINE_ERROR = /^(.+):(\d+):\s*(.+)$/;
