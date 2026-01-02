@@ -28,4 +28,11 @@ export interface CompilerBackend {
    * Cancel the current compilation
    */
   cancel(): void;
+
+  /**
+   * Clean build artifacts
+   * @param project Project configuration
+   * @returns Result with success status and message
+   */
+  clean(project: LaTeXProjectConfig): Promise<{ success: boolean; message: string }>;
 }

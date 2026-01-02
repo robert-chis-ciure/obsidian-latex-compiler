@@ -1,7 +1,7 @@
 import { setIcon } from 'obsidian';
 import { BuildResult } from '../types';
 
-export type BuildStatus = 'idle' | 'building' | 'success' | 'error';
+export type BuildStatus = 'idle' | 'building' | 'success' | 'error' | 'watching';
 
 /**
  * Status bar item for showing build status
@@ -46,6 +46,14 @@ export class StatusBarItem {
   }
 
   /**
+   * Set status to watching
+   */
+  setWatching(): void {
+    this.status = 'watching';
+    this.render();
+  }
+
+  /**
    * Get the element for click handling
    */
   getElement(): HTMLElement {
@@ -57,7 +65,7 @@ export class StatusBarItem {
    */
   private render(): void {
     this.element.empty();
-    this.element.removeClass('idle', 'building', 'success', 'error');
+    this.element.removeClass('idle', 'building', 'success', 'error', 'watching');
     this.element.addClass(this.status);
 
     // Icon
@@ -87,6 +95,11 @@ export class StatusBarItem {
       case 'error':
         setIcon(iconEl, 'x-circle');
         this.element.createSpan({ text: ` LaTeX: ${this.errorCount} error${this.errorCount !== 1 ? 's' : ''}` });
+        break;
+
+      case 'watching':
+        setIcon(iconEl, 'eye');
+        this.element.createSpan({ text: ' LaTeX: Watching' });
         break;
     }
   }

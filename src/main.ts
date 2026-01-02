@@ -29,6 +29,7 @@ import {
   ProjectConfigModal,
 } from './project/ProjectManager';
 import { isLatexmkAvailable } from './utils/platform';
+import { FileWatcher } from './utils/fileWatcher';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -38,6 +39,7 @@ export default class LaTeXCompilerPlugin extends Plugin {
   private orchestrator!: CompileOrchestrator;
   private projectManager!: ProjectManager;
   private statusBarItem!: StatusBarItem;
+  private fileWatcher!: FileWatcher;
   private diagnosticsView: DiagnosticsView | null = null;
   private pdfPreviewView: PDFPreviewView | null = null;
 
@@ -55,6 +57,7 @@ export default class LaTeXCompilerPlugin extends Plugin {
     this.backend = new LatexmkBackend(this.settings);
     this.orchestrator = new CompileOrchestrator(this.backend);
     this.projectManager = new ProjectManager(this.app, this.settings);
+    this.fileWatcher = new FileWatcher(this.app);
 
     // Set up orchestrator event handlers
     this.setupOrchestratorEvents();
@@ -101,6 +104,24 @@ export default class LaTeXCompilerPlugin extends Plugin {
       callback: () => this.checkInstallation(),
     });
 
+    this.addCommand({
+      id: 'show-build-log',
+      name: 'Show Build Log',
+      callback: () => this.showBuildLog(),
+    });
+
+    this.addCommand({
+      id: 'watch',
+      name: 'Watch LaTeX Project',
+      callback: () => this.watchProject(),
+    });
+
+    this.addCommand({
+      id: 'stop-watch',
+      name: 'Stop Watching LaTeX Project',
+      callback: () => this.stopWatching(),
+    });
+
     // Add settings tab
     this.addSettingTab(new LaTeXSettingTab(this.app, this));
 
@@ -122,6 +143,7 @@ export default class LaTeXCompilerPlugin extends Plugin {
   onunload(): void {
     console.log('Unloading LaTeX Compiler plugin');
     this.orchestrator.cancelAll();
+    this.fileWatcher.stopAll();
     this.statusBarItem.remove();
   }
 
@@ -277,7 +299,7 @@ export default class LaTeXCompilerPlugin extends Plugin {
   }
 
   /**
-   * Clean build artifacts for a project
+   * Clean build artifacts for a project using latexmk -C
    */
   async cleanProject(): Promise<void> {
     const projects = this.projectManager.getProjects();
@@ -288,16 +310,50 @@ export default class LaTeXCompilerPlugin extends Plugin {
     }
 
     for (const project of projects) {
-      const outputPath = path.join(project.rootPath, project.outputDir);
       try {
-        if (fs.existsSync(outputPath)) {
-          fs.rmSync(outputPath, { recursive: true });
-          new Notice(`Cleaned build directory: ${project.outputDir}`);
+        const result = await this.backend.clean(project);
+        if (result.success) {
+          new Notice(`Cleaned: ${path.basename(project.mainFile)}`);
+        } else {
+          new Notice(`Clean warning: ${result.message}`);
         }
       } catch (error) {
         console.error('Clean error:', error);
         new Notice(`Failed to clean: ${error}`);
       }
+    }
+  }
+
+  /**
+   * Show the build log for the last compiled project
+   */
+  async showBuildLog(): Promise<void> {
+    const projects = this.projectManager.getProjects();
+
+    if (projects.length === 0) {
+      new Notice('No LaTeX projects configured');
+      return;
+    }
+
+    // Use first project or could add a picker for multiple projects
+    const project = projects[0];
+    const logPath = path.join(project.rootPath, project.outputDir, 'build.log');
+
+    if (!fs.existsSync(logPath)) {
+      new Notice('No build log found. Run a compilation first.');
+      return;
+    }
+
+    // Read log content and copy to clipboard
+    try {
+      const logContent = fs.readFileSync(logPath, 'utf-8');
+
+      // Copy log content to clipboard for easy access
+      await navigator.clipboard.writeText(logContent);
+      new Notice(`Build log copied to clipboard.\n\nPath: ${logPath}`);
+    } catch (error) {
+      console.error('Error reading build log:', error);
+      new Notice(`Failed to read build log: ${error}`);
     }
   }
 
@@ -362,5 +418,119 @@ export default class LaTeXCompilerPlugin extends Plugin {
     const view = leaf.view as PDFPreviewView;
     await view.loadPdf(pdfPath);
     this.app.workspace.revealLeaf(leaf);
+  }
+
+  /**
+   * Start watching a LaTeX project for file changes
+   */
+  async watchProject(): Promise<void> {
+    // Check if latexmk is available
+    const available = await this.orchestrator.isBackendAvailable();
+    if (!available) {
+      new Notice(
+        'latexmk not found. Please install TeX Live or MacTeX and configure the path in settings.'
+      );
+      return;
+    }
+
+    // Find folders with .tex files
+    const folders = await this.projectManager.findLatexFolders();
+
+    if (folders.length === 0) {
+      new Notice('No folders with .tex files found in your vault');
+      return;
+    }
+
+    // If only one folder, watch it directly
+    if (folders.length === 1) {
+      await this.startWatchingFolder(folders[0]);
+      return;
+    }
+
+    // Show folder picker
+    new ProjectSelectModal(this.app, folders, async (folder) => {
+      await this.startWatchingFolder(folder);
+    }).open();
+  }
+
+  /**
+   * Start watching a specific folder
+   */
+  private async startWatchingFolder(folderPath: string): Promise<void> {
+    const absolutePath = this.projectManager.toAbsolutePath(folderPath);
+
+    // Check if already watching
+    if (this.fileWatcher.isWatching(absolutePath)) {
+      new Notice('Already watching this project');
+      return;
+    }
+
+    // Get or create project config
+    let config = this.projectManager.getProject(absolutePath);
+
+    if (!config) {
+      // Discover entrypoints
+      const entrypoints = await this.projectManager.discoverEntrypoints(folderPath);
+
+      if (entrypoints.length === 0) {
+        new Notice('No .tex files with \\documentclass found in this folder');
+        return;
+      }
+
+      // Create default config
+      config = this.projectManager.createDefaultConfig(absolutePath, entrypoints[0]);
+
+      // Show config modal
+      new ProjectConfigModal(
+        this.app,
+        config,
+        entrypoints,
+        async (finalConfig) => {
+          this.projectManager.addProject(finalConfig);
+          await this.saveSettings();
+          this.startWatchingProject(finalConfig);
+        }
+      ).open();
+      return;
+    }
+
+    // Start watching existing project
+    this.startWatchingProject(config);
+  }
+
+  /**
+   * Start watching a project with the file watcher
+   */
+  private startWatchingProject(project: LaTeXProjectConfig): void {
+    // Default debounce of 500ms
+    const debounceMs = this.settings.watchDebounce || 500;
+
+    this.fileWatcher.startWatching(
+      project,
+      async (proj) => {
+        new Notice(`Recompiling ${path.basename(proj.mainFile)}...`);
+        await this.runCompilation(proj);
+      },
+      debounceMs
+    );
+
+    this.statusBarItem.setWatching();
+    new Notice(`Watching ${path.basename(project.mainFile)} for changes`);
+  }
+
+  /**
+   * Stop watching all projects
+   */
+  stopWatching(): void {
+    const watchedProjects = this.fileWatcher.getWatchedProjects();
+
+    if (watchedProjects.length === 0) {
+      new Notice('No projects being watched');
+      return;
+    }
+
+    this.fileWatcher.stopAll();
+    this.statusBarItem.setIdle();
+    new Notice('Stopped watching all projects');
   }
 }

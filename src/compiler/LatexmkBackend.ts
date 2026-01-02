@@ -198,6 +198,47 @@ export class LatexmkBackend implements CompilerBackend {
   }
 
   /**
+   * Clean build artifacts using latexmk -C
+   */
+  async clean(project: LaTeXProjectConfig): Promise<{ success: boolean; message: string }> {
+    return new Promise((resolve) => {
+      const args = [
+        '-C',                             // Clean all generated files
+        `-outdir=${project.outputDir}`,   // Output directory
+        project.mainFile,                 // Main file
+      ];
+
+      const proc = spawn('latexmk', args, {
+        cwd: project.rootPath,
+        shell: false,
+        env: getEnvWithTexPath(this.settings.texPath),
+      });
+
+      let output = '';
+      proc.stdout?.on('data', (data: Buffer) => {
+        output += data.toString();
+      });
+      proc.stderr?.on('data', (data: Buffer) => {
+        output += data.toString();
+      });
+
+      proc.on('close', (code) => {
+        resolve({
+          success: code === 0,
+          message: code === 0 ? 'Build artifacts cleaned' : `Clean failed: ${output}`,
+        });
+      });
+
+      proc.on('error', (error) => {
+        resolve({
+          success: false,
+          message: `Failed to run latexmk -C: ${error.message}`,
+        });
+      });
+    });
+  }
+
+  /**
    * Build latexmk command line arguments
    * Note: With shell: false, paths don't need quoting - they're passed directly
    */
@@ -206,6 +247,7 @@ export class LatexmkBackend implements CompilerBackend {
       '-pdf',                           // Generate PDF output
       '-interaction=nonstopmode',       // Don't stop on errors
       '-file-line-error',               // Better error locations for parser
+      '-synctex=1',                     // Generate SyncTeX data for PDF↔source sync
       `-outdir=${project.outputDir}`,   // Output directory
     ];
 
