@@ -4,7 +4,7 @@ import * as fs from 'fs/promises';
 import { CompilerBackend } from './CompilerBackend';
 import { LaTeXProjectConfig, LaTeXPluginSettings, BuildResult, Diagnostic } from '../types';
 import { TeXLogParser } from '../parser/TeXLogParser';
-import { getEnvWithTexPath, quotePath } from '../utils/platform';
+import { getEnvWithTexPath, getPlatform } from '../utils/platform';
 
 /**
  * Latexmk-based compiler backend
@@ -32,7 +32,7 @@ export class LatexmkBackend implements CompilerBackend {
   async isAvailable(): Promise<boolean> {
     return new Promise((resolve) => {
       const proc = spawn('latexmk', ['--version'], {
-        shell: true,
+        shell: false,
         env: getEnvWithTexPath(this.settings.texPath),
       });
 
@@ -62,9 +62,12 @@ export class LatexmkBackend implements CompilerBackend {
       let stderr = '';
       let cancelled = false;
 
+      // Use shell: false for security (no command injection)
+      // Use detached: true to create a process group for proper cleanup
       this.currentProcess = spawn('latexmk', args, {
         cwd: project.rootPath,
-        shell: true,
+        shell: false,
+        detached: getPlatform() !== 'win32', // Process groups work differently on Windows
         env: getEnvWithTexPath(this.settings.texPath),
       });
 
@@ -177,7 +180,7 @@ export class LatexmkBackend implements CompilerBackend {
         setTimeout(() => {
           if (this.currentProcess === proc) {
             cancelled = true;
-            proc.kill('SIGTERM');
+            this.killProcessTree(proc);
           }
         }, this.settings.compileTimeout);
       }
@@ -189,19 +192,21 @@ export class LatexmkBackend implements CompilerBackend {
    */
   cancel(): void {
     if (this.currentProcess) {
-      this.currentProcess.kill('SIGTERM');
+      this.killProcessTree(this.currentProcess);
       this.currentProcess = null;
     }
   }
 
   /**
    * Build latexmk command line arguments
+   * Note: With shell: false, paths don't need quoting - they're passed directly
    */
   private buildArgs(project: LaTeXProjectConfig): string[] {
     const args: string[] = [
       '-pdf',                           // Generate PDF output
       '-interaction=nonstopmode',       // Don't stop on errors
-      `-outdir=${quotePath(project.outputDir)}`,  // Output directory
+      '-file-line-error',               // Better error locations for parser
+      `-outdir=${project.outputDir}`,   // Output directory
     ];
 
     // Engine selection
@@ -225,7 +230,7 @@ export class LatexmkBackend implements CompilerBackend {
 
     // Custom latexmkrc
     if (project.latexmkrcPath) {
-      args.push('-r', quotePath(project.latexmkrcPath));
+      args.push('-r', project.latexmkrcPath);
     }
 
     // Extra arguments
@@ -234,8 +239,42 @@ export class LatexmkBackend implements CompilerBackend {
     }
 
     // Main file (must be last)
-    args.push(quotePath(project.mainFile));
+    args.push(project.mainFile);
 
     return args;
+  }
+
+  /**
+   * Kill process tree (latexmk spawns child TeX processes)
+   */
+  private killProcessTree(proc: ChildProcess): void {
+    if (!proc.pid) return;
+
+    if (getPlatform() === 'win32') {
+      // Windows: use taskkill to kill process tree
+      spawn('taskkill', ['/pid', proc.pid.toString(), '/T', '/F'], {
+        shell: false,
+      });
+    } else {
+      // Unix: kill the process group (negative PID)
+      try {
+        process.kill(-proc.pid, 'SIGTERM');
+        // SIGKILL fallback after 3 seconds if still running
+        setTimeout(() => {
+          try {
+            process.kill(-proc.pid!, 'SIGKILL');
+          } catch {
+            // Process already dead, ignore
+          }
+        }, 3000);
+      } catch {
+        // Process already dead or no permission, try direct kill
+        try {
+          proc.kill('SIGKILL');
+        } catch {
+          // Ignore
+        }
+      }
+    }
   }
 }
