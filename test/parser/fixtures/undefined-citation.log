@@ -1,0 +1,23 @@
+This is pdfTeX, Version 3.141592653-2.6-1.40.24 (TeX Live 2022) (preloaded format=pdflatex)
+ restricted \write18 enabled.
+entering extended mode
+(./main.tex
+LaTeX2e <2022-06-01> patch level 5
+L3 programming layer <2022-12-17>
+(/usr/local/texlive/2022/texmf-dist/tex/latex/base/article.cls
+Document Class: article 2021/10/04 v1.4n Standard LaTeX document class
+(/usr/local/texlive/2022/texmf-dist/tex/latex/base/size10.clo))
+(./main.aux)
+
+LaTeX Warning: Citation `smith2023' on page 1 undefined on input line 12.
+
+
+LaTeX Warning: Citation `jones2022' on page 2 undefined on input line 25.
+
+[1{/usr/local/texlive/2022/texmf-var/fonts/map/pdftex/updmap/pdftex.map}]
+[2] (./main.aux)
+
+LaTeX Warning: There were undefined citations.
+
+Output written on main.pdf (2 pages, 25000 bytes).
+Transcript written on main.log.

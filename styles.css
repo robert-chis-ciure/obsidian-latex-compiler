@@ -1,0 +1,278 @@
+/* LaTeX Compiler Plugin Styles */
+
+/* Status Bar Item */
+.latex-status-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.latex-status-bar-item:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.latex-status-bar-item.error {
+  color: var(--text-error);
+}
+
+.latex-status-bar-item.success {
+  color: var(--text-success);
+}
+
+.latex-status-bar-item.building {
+  color: var(--text-accent);
+}
+
+.latex-status-icon {
+  display: flex;
+  align-items: center;
+}
+
+.latex-status-icon.spinning svg {
+  animation: latex-spin 1s linear infinite;
+}
+
+@keyframes latex-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Diagnostics View */
+.latex-diagnostics-header {
+  padding: 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.latex-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.latex-status.success {
+  color: var(--text-success);
+}
+
+.latex-status.error {
+  color: var(--text-error);
+}
+
+.latex-counts {
+  display: flex;
+  gap: 12px;
+}
+
+.latex-count {
+  font-size: 0.9em;
+}
+
+.latex-count.error {
+  color: var(--text-error);
+}
+
+.latex-count.warning {
+  color: var(--text-warning);
+}
+
+.latex-duration {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.latex-diagnostics-list {
+  padding: 8px;
+}
+
+.latex-no-diagnostics {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.latex-diagnostic {
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  background-color: var(--background-secondary);
+  border-left: 3px solid transparent;
+}
+
+.latex-diagnostic.error {
+  border-left-color: var(--text-error);
+}
+
+.latex-diagnostic.warning {
+  border-left-color: var(--text-warning);
+}
+
+.latex-diagnostic.info {
+  border-left-color: var(--text-accent);
+}
+
+.latex-diagnostic-icon {
+  margin-right: 8px;
+}
+
+.latex-diagnostic.error .latex-diagnostic-icon {
+  color: var(--text-error);
+}
+
+.latex-diagnostic.warning .latex-diagnostic-icon {
+  color: var(--text-warning);
+}
+
+.latex-diagnostic.info .latex-diagnostic-icon {
+  color: var(--text-accent);
+}
+
+.latex-diagnostic-location {
+  cursor: pointer;
+  color: var(--text-accent);
+  text-decoration: underline;
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+}
+
+.latex-diagnostic-location:hover {
+  color: var(--text-accent-hover);
+}
+
+.latex-diagnostic-message {
+  margin-top: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.latex-diagnostic-suggestion {
+  margin-top: 4px;
+  font-size: 0.9em;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.latex-diagnostic-details {
+  margin-top: 8px;
+}
+
+.latex-diagnostic-details summary {
+  cursor: pointer;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.latex-diagnostic-details pre {
+  margin-top: 8px;
+  padding: 8px;
+  background-color: var(--background-primary);
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.85em;
+}
+
+.latex-diagnostic-details code {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* PDF Preview View */
+.latex-pdf-preview-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.latex-pdf-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  gap: 8px;
+}
+
+.latex-pdf-filename {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.latex-pdf-toolbar-spacer {
+  flex: 1;
+}
+
+.latex-pdf-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.latex-pdf-zoom-controls button {
+  padding: 4px 8px;
+  min-width: 30px;
+}
+
+.latex-pdf-zoom-label {
+  min-width: 50px;
+  text-align: center;
+  font-size: 0.9em;
+}
+
+.latex-pdf-external-btn {
+  font-size: 0.9em;
+}
+
+.latex-pdf-container {
+  flex: 1;
+  overflow: auto;
+  background-color: var(--background-secondary);
+}
+
+.latex-pdf-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.latex-pdf-placeholder,
+.latex-pdf-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  padding: 20px;
+  text-align: center;
+}
+
+.latex-pdf-error {
+  color: var(--text-error);
+}
+
+/* Settings Tab */
+.latex-compiler-help {
+  margin-top: 20px;
+  padding: 12px;
+  background-color: var(--background-secondary);
+  border-radius: 4px;
+}
+
+.latex-compiler-help p {
+  margin: 8px 0;
+}
+
+.latex-compiler-help ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.latex-compiler-help li {
+  margin: 4px 0;
+}

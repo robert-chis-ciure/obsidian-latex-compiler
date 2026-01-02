@@ -1,0 +1,10 @@
+{
+  "id": "latex-compiler",
+  "name": "LaTeX Compiler",
+  "version": "0.1.0",
+  "minAppVersion": "1.0.0",
+  "description": "Compile multi-file LaTeX projects with structured error reporting and PDF preview",
+  "author": "LaTeX Compiler Contributors",
+  "authorUrl": "https://github.com/obsidian-latex-compiler",
+  "isDesktopOnly": true
+}

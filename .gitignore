@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+main.js
+*.js.map
+
+# TeX build artifacts
+.latex-out/
+*.aux
+*.log
+!test/parser/fixtures/*.log
+*.toc
+*.bbl
+*.blg
+*.synctex.gz
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# npm
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# Obsidian
+data.json
