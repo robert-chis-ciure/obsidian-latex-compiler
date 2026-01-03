@@ -8,16 +8,17 @@
 
 ## Executive Summary
 
-The MVP (Phase 1) is functionally complete but has **critical gaps** identified in code review:
+The MVP (Phase 1) is complete and all critical issues have been resolved:
 
 | Area | Status | Priority |
 |------|--------|----------|
 | Core compilation | ✅ Working | - |
-| Parser (12 patterns) | ✅ Working | - |
-| Security hardening | ⚠️ Needs work | **P0** |
-| Testing coverage | ⚠️ Inadequate | **P0** |
-| Watch mode | ❌ Not started | P1 |
-| Per-project config | ❌ Not started | P2 |
+| Parser (20+ patterns) | ✅ Working | - |
+| Security hardening | ✅ Complete | - |
+| Testing coverage | ✅ Adequate | - |
+| Watch mode | ✅ Implemented | - |
+| Per-project config | ✅ Implemented | - |
+| ProjectsView sidebar | ❌ Not started | P2 |
 
 ---
 
@@ -25,25 +26,33 @@ The MVP (Phase 1) is functionally complete but has **critical gaps** identified 
 
 This section captures what is still missing after reviewing the repository.
 
-### P0 (must fix before release)
-- Remove `shell: true` from latexmk spawns; validate args and stop quoting in args once `shell: false` is used.
-- Implement process-tree cancellation with a SIGKILL fallback (latexmk child processes persist today).
-- Add integration/smoke tests (current suite only covers parser unit tests; no compile coverage).
-- Add `-file-line-error` to latexmk args to improve file/line accuracy in diagnostics.
-- Remove unused `pdfjs-dist` dependency or wire it up (PDF preview is iframe-based today).
+### P0 (Release-Ready)
+All P0 items have been resolved:
+- ✅ `shell: false` in all spawn calls (LatexmkBackend.ts:69)
+- ✅ Process-tree cancellation with SIGKILL fallback (LatexmkBackend.ts:292-320)
+- ✅ Integration tests exist (test/integration/compile.test.ts)
+- ✅ Smoke tests exist (test/e2e/smoke.test.ts)
+- ✅ `-file-line-error` flag added (LatexmkBackend.ts:249)
+- ✅ `pdfjs-dist` removed from package.json
 
-### P1 (next sprint)
-- Add `-synctex=1` and either `-cd` or compile with `cwd` set to the main file's directory.
-- Change clean command to use `latexmk -C` instead of raw `fs.rmSync`.
-- Add "Show Build Log" command to open `.latex-out/build.log`.
-- Implement watch mode with vault events + debounce; ignore output dir to prevent loops.
+### P1 (Completed)
+All P1 items have been resolved:
+- ✅ `-synctex=1` flag added (LatexmkBackend.ts:250)
+- ✅ Clean command uses `latexmk -C` (LatexmkBackend.ts:203)
+- ✅ "Show Build Log" command (main.ts:108)
+- ✅ Watch mode with vault events + debounce (FileWatcher.ts)
 
-### P2 (later)
-- Add per-project config file support (`.obsidian-latex.json`) and a Projects sidebar view.
-- Expand parser patterns for BibTeX/Biber and add raw-log fallback when parsing fails.
+### P2 (Future)
+- ❌ ProjectsView sidebar - UI view showing all projects
+- ⚠️ Queue semantics improvement - optional enhancement
 
-### Already resolved (no longer remaining)
-- PATH delimiter handling uses `getPathSeparator()` in `src/utils/platform.ts`.
+### Already resolved (moved from remaining)
+- PATH delimiter handling uses `getPathSeparator()` in `src/utils/platform.ts`
+- ProjectConfig.ts created for per-project config file support
+- .latexmkrc detection implemented in ProjectManager.ts
+- BibTeX/Biber patterns added to parser (patterns.ts:65-90)
+- FILE_LINE_ERROR pattern added (patterns.ts:90)
+- Graceful fallback when parsing fails (TeXLogParser.ts:22-36)
 
 ---
 
@@ -326,32 +335,32 @@ parse(logContent: string, projectRoot: string): Diagnostic[] {
 
 ## Part 6: Implementation Checklist
 
-### P0 - Critical (Do First)
+### P0 - Critical (All Complete) ✅
 
-- [ ] **SEC-1**: Replace `shell: true` with `shell: false` in LatexmkBackend
-- [ ] **SEC-2**: Fix PATH delimiter to use `path.delimiter`
-- [ ] **SEC-3**: Implement process-tree killing with SIGKILL fallback
-- [ ] **TEST-1**: Add integration tests for LatexmkBackend
-- [ ] **TEST-2**: Add smoke tests for PATH detection
-- [ ] **DEP-1**: Remove unused `pdfjs-dist` dependency
-- [ ] **LATEXMK-1**: Add `-file-line-error` flag
+- [x] **SEC-1**: Replace `shell: true` with `shell: false` in LatexmkBackend
+- [x] **SEC-2**: Fix PATH delimiter to use `path.delimiter`
+- [x] **SEC-3**: Implement process-tree killing with SIGKILL fallback
+- [x] **TEST-1**: Add integration tests for LatexmkBackend
+- [x] **TEST-2**: Add smoke tests for PATH detection
+- [x] **DEP-1**: Remove unused `pdfjs-dist` dependency
+- [x] **LATEXMK-1**: Add `-file-line-error` flag
 
-### P1 - Important (Next Sprint)
+### P1 - Important (All Complete) ✅
 
-- [ ] **WATCH-1**: Implement vault-based file watching
-- [ ] **WATCH-2**: Add watch/stop-watch commands
-- [ ] **WATCH-3**: Add debounce with configurable delay
-- [ ] **LATEXMK-2**: Add `-synctex=1` flag
-- [ ] **LATEXMK-3**: Use `latexmk -C` for clean command
-- [ ] **CMD-1**: Add "Show Build Log" command
+- [x] **WATCH-1**: Implement vault-based file watching
+- [x] **WATCH-2**: Add watch/stop-watch commands
+- [x] **WATCH-3**: Add debounce with configurable delay
+- [x] **LATEXMK-2**: Add `-synctex=1` flag
+- [x] **LATEXMK-3**: Use `latexmk -C` for clean command
+- [x] **CMD-1**: Add "Show Build Log" command
 
-### P2 - Nice to Have (Phase 3)
+### P2 - Nice to Have (Partial)
 
-- [ ] **CONFIG-1**: Support `.obsidian-latex.json` per project
+- [x] **CONFIG-1**: Support `.obsidian-latex.json` per project
 - [ ] **CONFIG-2**: Create ProjectsView sidebar
-- [ ] **CONFIG-3**: Detect and use `.latexmkrc`
-- [ ] **PARSER-1**: Add BibTeX/Biber error patterns
-- [ ] **PARSER-2**: Use `-file-line-error` output format
+- [x] **CONFIG-3**: Detect and use `.latexmkrc`
+- [x] **PARSER-1**: Add BibTeX/Biber error patterns
+- [x] **PARSER-2**: Use `-file-line-error` output format
 
 ---
 
@@ -375,20 +384,20 @@ parse(logContent: string, projectRoot: string): Diagnostic[] {
 
 ## Part 8: Acceptance Criteria for v0.2.0
 
-### Must Have (P0 complete)
-- [ ] No `shell: true` in any spawn calls
-- [ ] PATH works correctly on Windows (uses `;` separator)
-- [ ] Cancel actually kills TeX processes
-- [ ] Integration tests pass on macOS
-- [ ] Error locations accurate with `-file-line-error`
+### Must Have (P0 complete) ✅
+- [x] No `shell: true` in any spawn calls
+- [x] PATH works correctly on Windows (uses `;` separator)
+- [x] Cancel actually kills TeX processes
+- [x] Integration tests pass on macOS
+- [x] Error locations accurate with `-file-line-error`
 
-### Should Have (P1 complete)
-- [ ] Watch mode triggers recompile on .tex save
-- [ ] "Show Build Log" command works
-- [ ] Clean uses `latexmk -C`
+### Should Have (P1 complete) ✅
+- [x] Watch mode triggers recompile on .tex save
+- [x] "Show Build Log" command works
+- [x] Clean uses `latexmk -C`
 
-### Could Have (P2 started)
-- [ ] Per-project config file support
+### Could Have (P2 partial)
+- [x] Per-project config file support
 - [ ] Projects sidebar view
 
 ---
@@ -439,3 +448,4 @@ npm run dev
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | v1 | 2026-01-02 | Claude (Opus 4.5) | Initial consolidated plan from PROJECT.md + IMPROVEMENTS.md |
+| v1.1 | 2026-01-03 | Claude (Sonnet 4.5) | Updated to reflect actual implementation state - P0/P1 complete |

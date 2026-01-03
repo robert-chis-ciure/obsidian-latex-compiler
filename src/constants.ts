@@ -57,3 +57,5 @@ export const COMMANDS = {
   SHOW_LOG: 'latex-compiler:show-log',
   CHECK_INSTALLATION: 'latex-compiler:check-installation',
 };
+
+export const VIEW_TYPE_PROJECTS = 'latex-projects-view';

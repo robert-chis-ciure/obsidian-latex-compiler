@@ -276,3 +276,49 @@
 .latex-compiler-help li {
   margin: 4px 0;
 }
+
+/* Projects View */
+.latex-project-item {
+  padding: 8px;
+  margin-bottom: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+}
+
+.latex-project-header {
+  margin-bottom: 4px;
+}
+
+.latex-project-details {
+  font-size: 0.9em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.latex-project-status {
+  margin-top: 4px;
+}
+
+.latex-status-watching {
+  color: var(--text-accent);
+  margin-right: 8px;
+}
+
+.latex-status-success {
+  color: var(--color-green);
+}
+
+.latex-status-error {
+  color: var(--color-red);
+}
+
+.latex-project-buttons {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.latex-projects-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}

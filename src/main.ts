@@ -5,6 +5,7 @@ import {
   Notice,
   WorkspaceLeaf,
   TFolder,
+  Platform,
 } from 'obsidian';
 import {
   LaTeXPluginSettings,
@@ -15,6 +16,7 @@ import {
 import {
   VIEW_TYPE_DIAGNOSTICS,
   VIEW_TYPE_PDF_PREVIEW,
+  VIEW_TYPE_PROJECTS,
   COMMANDS,
 } from './constants';
 import { LaTeXSettingTab } from './settings';
@@ -22,6 +24,7 @@ import { LatexmkBackend } from './compiler/LatexmkBackend';
 import { CompileOrchestrator } from './compiler/CompileOrchestrator';
 import { DiagnosticsView } from './views/DiagnosticsView';
 import { PDFPreviewView } from './views/PDFPreviewView';
+import { ProjectsView } from './views/ProjectsView';
 import { StatusBarItem } from './views/StatusBarItem';
 import {
   ProjectManager,
@@ -42,12 +45,20 @@ export default class LaTeXCompilerPlugin extends Plugin {
   private fileWatcher!: FileWatcher;
   private diagnosticsView: DiagnosticsView | null = null;
   private pdfPreviewView: PDFPreviewView | null = null;
+  private projectsView: ProjectsView | null = null;
 
   constructor(app: App, manifest: PluginManifest) {
     super(app, manifest);
   }
 
   async onload(): Promise<void> {
+    // Check for mobile - this plugin requires desktop
+    if (Platform.isMobile) {
+      new Notice('LaTeX Compiler requires a desktop environment. This plugin will not work on mobile.');
+      console.log('LaTeX Compiler: Mobile detected, plugin disabled');
+      return;
+    }
+
     console.log('Loading LaTeX Compiler plugin');
 
     // Load settings
@@ -71,6 +82,37 @@ export default class LaTeXCompilerPlugin extends Plugin {
     this.registerView(VIEW_TYPE_PDF_PREVIEW, (leaf) => {
       this.pdfPreviewView = new PDFPreviewView(leaf);
       return this.pdfPreviewView;
+    });
+
+    this.registerView(VIEW_TYPE_PROJECTS, (leaf) => {
+      this.projectsView = new ProjectsView(leaf);
+
+      // Wire up callbacks
+      this.projectsView.onCompile = async (project) => {
+        await this.runCompilation(project);
+      };
+      this.projectsView.onWatch = (project) => {
+        this.startWatchingProject(project);
+      };
+      this.projectsView.onStopWatch = (project) => {
+        this.fileWatcher.stopWatching(project.rootPath);
+        this.statusBarItem.setIdle();
+        new Notice(`Stopped watching ${path.basename(project.mainFile)}`);
+        this.updateProjectsView();
+      };
+      this.projectsView.onClean = async (project) => {
+        const result = await this.backend.clean(project);
+        if (result.success) {
+          new Notice(`Cleaned: ${path.basename(project.mainFile)}`);
+        } else {
+          new Notice(`Clean failed: ${result.message}`);
+        }
+      };
+
+      // Initial data
+      this.projectsView.setProjects(this.projectManager.getProjects());
+
+      return this.projectsView;
     });
 
     // Add status bar item
@@ -122,6 +164,12 @@ export default class LaTeXCompilerPlugin extends Plugin {
       callback: () => this.stopWatching(),
     });
 
+    this.addCommand({
+      id: 'show-projects',
+      name: 'Show LaTeX Projects',
+      callback: () => this.activateProjectsView(),
+    });
+
     // Add settings tab
     this.addSettingTab(new LaTeXSettingTab(this.app, this));
 
@@ -169,7 +217,7 @@ export default class LaTeXCompilerPlugin extends Plugin {
     this.orchestrator.on('job:completed', (job) => {
       if (job.result) {
         this.statusBarItem.setBuildResult(job.result);
-        this.handleBuildResult(job.result);
+        this.handleBuildResult(job.result, job.project.rootPath);
       }
     });
 
@@ -182,11 +230,15 @@ export default class LaTeXCompilerPlugin extends Plugin {
   /**
    * Handle build result - update views and show PDF
    */
-  private async handleBuildResult(result: BuildResult): Promise<void> {
+  private async handleBuildResult(result: BuildResult, projectPath: string): Promise<void> {
     // Update diagnostics view
     if (this.diagnosticsView) {
       this.diagnosticsView.setDiagnostics(result);
     }
+
+    // Update projects view
+    this.updateProjectsView();
+    this.projectsView?.setBuildResult(projectPath, result);
 
     // Open diagnostics view if there are errors
     if (!result.success) {
@@ -275,6 +327,7 @@ export default class LaTeXCompilerPlugin extends Plugin {
         async (finalConfig) => {
           this.projectManager.addProject(finalConfig);
           await this.saveSettings();
+          this.updateProjectsView();
           await this.runCompilation(finalConfig);
         }
       ).open();
@@ -396,6 +449,37 @@ export default class LaTeXCompilerPlugin extends Plugin {
   }
 
   /**
+   * Activate the projects view
+   */
+  async activateProjectsView(): Promise<void> {
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_PROJECTS);
+
+    if (leaves.length === 0) {
+      const leaf = this.app.workspace.getLeftLeaf(false);
+      if (leaf) {
+        await leaf.setViewState({
+          type: VIEW_TYPE_PROJECTS,
+          active: true,
+        });
+      }
+    } else {
+      this.app.workspace.revealLeaf(leaves[0]);
+    }
+  }
+
+  /**
+   * Update the projects view with current data
+   */
+  private updateProjectsView(): void {
+    if (this.projectsView) {
+      this.projectsView.setProjects(this.projectManager.getProjects());
+      this.projectsView.setWatchedProjects(
+        new Set(this.fileWatcher.getWatchedProjects().map(p => p.rootPath))
+      );
+    }
+  }
+
+  /**
    * Show PDF preview
    */
   async showPdfPreview(pdfPath: string): Promise<void> {
@@ -488,6 +572,7 @@ export default class LaTeXCompilerPlugin extends Plugin {
         async (finalConfig) => {
           this.projectManager.addProject(finalConfig);
           await this.saveSettings();
+          this.updateProjectsView();
           this.startWatchingProject(finalConfig);
         }
       ).open();

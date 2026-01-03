@@ -123,6 +123,8 @@ export interface CompileJob {
   process?: ChildProcess;
   /** Build result (set when completed) */
   result?: BuildResult;
+  /** Resolve callback for queued jobs */
+  resolve?: (result: BuildResult) => void;
 }
 
 /**
