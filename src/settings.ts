@@ -1,7 +1,9 @@
 import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import type LaTeXCompilerPlugin from './main';
-import { LaTeXPluginSettings, TeXEngine } from './types';
+import { LaTeXPluginSettings, TeXEngine, CompilerBackendType } from './types';
 import { autoDetectTexPath, isLatexmkAvailable } from './utils/platform';
+import { TectonicDownloader } from './utils/TectonicDownloader';
+import { TECTONIC_VERSION } from './constants';
 
 export class LaTeXSettingTab extends PluginSettingTab {
   plugin: LaTeXCompilerPlugin;
@@ -17,47 +19,30 @@ export class LaTeXSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'LaTeX Compiler Settings' });
 
-    // TeX Distribution Path
+    // Compiler Backend Selection
+    containerEl.createEl('h3', { text: 'Compiler Backend' });
+
     new Setting(containerEl)
-      .setName('TeX distribution path')
-      .setDesc('Path to TeX binaries (leave empty for auto-detection)')
-      .addText((text) =>
-        text
-          .setPlaceholder('/Library/TeX/texbin')
-          .setValue(this.plugin.settings.texPath)
-          .onChange(async (value) => {
-            this.plugin.settings.texPath = value;
+      .setName('Compiler backend')
+      .setDesc('Choose which LaTeX engine to use for compilation')
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption('tectonic', 'Tectonic (Recommended - No installation required)')
+          .addOption('latexmk', 'latexmk (Requires TeX Live/MacTeX)')
+          .setValue(this.plugin.settings.compilerBackend)
+          .onChange(async (value: CompilerBackendType) => {
+            this.plugin.settings.compilerBackend = value;
             await this.plugin.saveSettings();
+            this.display(); // Refresh to show relevant settings
           })
-      )
-      .addButton((button) =>
-        button.setButtonText('Auto-detect').onClick(async () => {
-          const detected = await autoDetectTexPath();
-          if (detected) {
-            this.plugin.settings.texPath = detected;
-            await this.plugin.saveSettings();
-            this.display(); // Refresh to show new value
-            new Notice(`TeX path detected: ${detected}`);
-          } else {
-            new Notice('Could not auto-detect TeX installation');
-          }
-        })
       );
 
-    // Check Installation Button
-    new Setting(containerEl)
-      .setName('Check installation')
-      .setDesc('Verify that latexmk is accessible')
-      .addButton((button) =>
-        button.setButtonText('Check').onClick(async () => {
-          const available = await isLatexmkAvailable(this.plugin.settings.texPath);
-          if (available) {
-            new Notice('latexmk is available and working');
-          } else {
-            new Notice('latexmk not found. Please install TeX Live or MacTeX.');
-          }
-        })
-      );
+    // Tectonic-specific settings
+    if (this.plugin.settings.compilerBackend === 'tectonic') {
+      this.displayTectonicSettings(containerEl);
+    } else {
+      this.displayLatexmkSettings(containerEl);
+    }
 
     containerEl.createEl('h3', { text: 'Default Project Settings' });
 
@@ -166,20 +151,147 @@ export class LaTeXSettingTab extends PluginSettingTab {
       );
 
     // Installation Help
-    containerEl.createEl('h3', { text: 'Installation Help' });
+    containerEl.createEl('h3', { text: 'About' });
 
     const helpDiv = containerEl.createDiv({ cls: 'latex-compiler-help' });
-    helpDiv.createEl('p', {
-      text: 'This plugin requires a TeX distribution to be installed on your system.',
-    });
 
-    const list = helpDiv.createEl('ul');
-    list.createEl('li', { text: 'macOS: Install MacTeX from tug.org/mactex or via Homebrew' });
-    list.createEl('li', { text: 'Windows: Install MiKTeX or TeX Live' });
-    list.createEl('li', { text: 'Linux: Install TeX Live via your package manager' });
+    if (this.plugin.settings.compilerBackend === 'tectonic') {
+      helpDiv.createEl('p', {
+        text: 'Tectonic is a self-contained LaTeX engine that automatically downloads packages as needed. No separate TeX installation required!',
+      });
+      helpDiv.createEl('p', {
+        text: 'On first compilation, Tectonic will download the binary (~30MB) and any required packages. Subsequent compilations will be faster.',
+      });
+    } else {
+      helpDiv.createEl('p', {
+        text: 'Using latexmk requires a TeX distribution to be installed on your system.',
+      });
 
-    helpDiv.createEl('p', {
-      text: 'After installation, click "Auto-detect" above or manually enter the path to your TeX binaries.',
-    });
+      const list = helpDiv.createEl('ul');
+      list.createEl('li', { text: 'macOS: Install MacTeX from tug.org/mactex or via Homebrew' });
+      list.createEl('li', { text: 'Windows: Install MiKTeX or TeX Live' });
+      list.createEl('li', { text: 'Linux: Install TeX Live via your package manager' });
+
+      helpDiv.createEl('p', {
+        text: 'After installation, click "Auto-detect" above or manually enter the path to your TeX binaries.',
+      });
+    }
+  }
+
+  /**
+   * Display Tectonic-specific settings
+   */
+  private displayTectonicSettings(containerEl: HTMLElement): void {
+    const pluginDir = (this.app as any).vault.adapter.basePath + '/.obsidian/plugins/obsidian-latex-compiler';
+    const downloader = new TectonicDownloader(pluginDir);
+
+    // Tectonic Status
+    const statusSetting = new Setting(containerEl)
+      .setName('Tectonic status')
+      .setDesc('Check if Tectonic is installed and ready');
+
+    // Check status asynchronously
+    (async () => {
+      const isInstalled = await downloader.isInstalled();
+      if (isInstalled) {
+        const version = await downloader.getInstalledVersion();
+        statusSetting.setDesc(`Tectonic ${version || 'unknown version'} is installed and ready`);
+        statusSetting.addButton((button) =>
+          button.setButtonText('Reinstall').onClick(async () => {
+            button.setDisabled(true);
+            button.setButtonText('Downloading...');
+            const result = await downloader.install((progress) => {
+              button.setButtonText(`Downloading: ${progress.percent}%`);
+            });
+            if (result.success) {
+              new Notice(`Tectonic ${result.version} installed successfully`);
+            } else {
+              new Notice(`Installation failed: ${result.error}`);
+            }
+            this.display();
+          })
+        );
+      } else if (downloader.isPlatformSupported()) {
+        statusSetting.setDesc(`Tectonic ${TECTONIC_VERSION} will be downloaded on first compilation`);
+        statusSetting.addButton((button) =>
+          button.setButtonText('Download Now').onClick(async () => {
+            button.setDisabled(true);
+            button.setButtonText('Downloading...');
+            const result = await downloader.install((progress) => {
+              button.setButtonText(`Downloading: ${progress.percent}%`);
+            });
+            if (result.success) {
+              new Notice(`Tectonic ${result.version} installed successfully`);
+            } else {
+              new Notice(`Installation failed: ${result.error}`);
+            }
+            this.display();
+          })
+        );
+      } else {
+        statusSetting.setDesc('Your platform is not supported for automatic Tectonic download. Please install manually.');
+      }
+    })();
+
+    // Custom Tectonic Path
+    new Setting(containerEl)
+      .setName('Custom Tectonic path')
+      .setDesc('Optional: Path to a custom Tectonic binary (leave empty to use downloaded version)')
+      .addText((text) =>
+        text
+          .setPlaceholder('/usr/local/bin/tectonic')
+          .setValue(this.plugin.settings.tectonicPath)
+          .onChange(async (value) => {
+            this.plugin.settings.tectonicPath = value;
+            await this.plugin.saveSettings();
+          })
+      );
+  }
+
+  /**
+   * Display latexmk-specific settings
+   */
+  private displayLatexmkSettings(containerEl: HTMLElement): void {
+    // TeX Distribution Path
+    new Setting(containerEl)
+      .setName('TeX distribution path')
+      .setDesc('Path to TeX binaries (leave empty for auto-detection)')
+      .addText((text) =>
+        text
+          .setPlaceholder('/Library/TeX/texbin')
+          .setValue(this.plugin.settings.texPath)
+          .onChange(async (value) => {
+            this.plugin.settings.texPath = value;
+            await this.plugin.saveSettings();
+          })
+      )
+      .addButton((button) =>
+        button.setButtonText('Auto-detect').onClick(async () => {
+          const detected = await autoDetectTexPath();
+          if (detected) {
+            this.plugin.settings.texPath = detected;
+            await this.plugin.saveSettings();
+            this.display();
+            new Notice(`TeX path detected: ${detected}`);
+          } else {
+            new Notice('Could not auto-detect TeX installation');
+          }
+        })
+      );
+
+    // Check Installation Button
+    new Setting(containerEl)
+      .setName('Check installation')
+      .setDesc('Verify that latexmk is accessible')
+      .addButton((button) =>
+        button.setButtonText('Check').onClick(async () => {
+          const available = await isLatexmkAvailable(this.plugin.settings.texPath);
+          if (available) {
+            new Notice('latexmk is available and working');
+          } else {
+            new Notice('latexmk not found. Please install TeX Live or MacTeX.');
+          }
+        })
+      );
   }
 }

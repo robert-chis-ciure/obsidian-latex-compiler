@@ -6,6 +6,11 @@ import { ChildProcess } from 'child_process';
 export type TeXEngine = 'pdflatex' | 'xelatex' | 'lualatex';
 
 /**
+ * Compiler backend options
+ */
+export type CompilerBackendType = 'latexmk' | 'tectonic';
+
+/**
  * Diagnostic severity levels
  */
 export type DiagnosticSeverity = 'error' | 'warning' | 'info';
@@ -41,6 +46,10 @@ export interface LaTeXProjectConfig {
 export interface LaTeXPluginSettings {
   /** Custom path to TeX binaries (empty = auto-detect) */
   texPath: string;
+  /** Compiler backend to use */
+  compilerBackend: CompilerBackendType;
+  /** Custom path to Tectonic binary (empty = use bundled/downloaded) */
+  tectonicPath: string;
   /** Default TeX engine for new projects */
   defaultEngine: TeXEngine;
   /** Default output directory for new projects */
@@ -62,6 +71,8 @@ export interface LaTeXPluginSettings {
  */
 export const DEFAULT_SETTINGS: LaTeXPluginSettings = {
   texPath: '',
+  compilerBackend: 'tectonic', // Default to Tectonic for zero-install experience
+  tectonicPath: '',
   defaultEngine: 'pdflatex',
   defaultOutputDir: '.latex-out',
   shellEscape: false,

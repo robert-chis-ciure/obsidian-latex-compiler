@@ -3,6 +3,8 @@ import { LaTeXProjectConfig, LaTeXPluginSettings, BuildResult, CompilerBackend }
 
 const defaultSettings: LaTeXPluginSettings = {
   texPath: '',
+  compilerBackend: 'latexmk',
+  tectonicPath: '',
   defaultEngine: 'pdflatex',
   defaultOutputDir: '.latex-out',
   shellEscape: false,
@@ -36,12 +38,14 @@ function createMockBackend(): CompilerBackend & {
   compile: jest.Mock;
   isAvailable: jest.Mock;
   cancel: jest.Mock;
+  clean: jest.Mock;
 } {
   return {
     name: 'mock-latexmk',
     compile: jest.fn().mockResolvedValue(mockSuccessResult),
     isAvailable: jest.fn().mockResolvedValue(true),
     cancel: jest.fn(),
+    clean: jest.fn().mockResolvedValue({ success: true, message: 'Cleaned' }),
   };
 }
 

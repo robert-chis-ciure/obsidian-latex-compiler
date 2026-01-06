@@ -24,6 +24,45 @@ export const TEX_PATHS = {
 };
 
 /**
+ * Tectonic release information
+ * Updated: January 2025
+ */
+export const TECTONIC_VERSION = '0.15.0';
+export const TECTONIC_RELEASE_URL = `https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${TECTONIC_VERSION}`;
+
+/**
+ * Tectonic binary download URLs by platform and architecture
+ */
+export const TECTONIC_DOWNLOADS: Record<string, Record<string, { url: string; binary: string }>> = {
+  darwin: {
+    x64: {
+      url: `${TECTONIC_RELEASE_URL}/tectonic-${TECTONIC_VERSION}-x86_64-apple-darwin.tar.gz`,
+      binary: 'tectonic',
+    },
+    arm64: {
+      url: `${TECTONIC_RELEASE_URL}/tectonic-${TECTONIC_VERSION}-aarch64-apple-darwin.tar.gz`,
+      binary: 'tectonic',
+    },
+  },
+  linux: {
+    x64: {
+      url: `${TECTONIC_RELEASE_URL}/tectonic-${TECTONIC_VERSION}-x86_64-unknown-linux-gnu.tar.gz`,
+      binary: 'tectonic',
+    },
+    arm64: {
+      url: `${TECTONIC_RELEASE_URL}/tectonic-${TECTONIC_VERSION}-aarch64-unknown-linux-gnu.tar.gz`,
+      binary: 'tectonic',
+    },
+  },
+  win32: {
+    x64: {
+      url: `${TECTONIC_RELEASE_URL}/tectonic-${TECTONIC_VERSION}-x86_64-pc-windows-msvc.zip`,
+      binary: 'tectonic.exe',
+    },
+  },
+};
+
+/**
  * File extensions to watch for changes in watch mode
  */
 export const WATCH_EXTENSIONS = ['.tex', '.bib', '.cls', '.sty', '.bst'];

@@ -20,7 +20,9 @@ import {
   COMMANDS,
 } from './constants';
 import { LaTeXSettingTab } from './settings';
+import { CompilerBackend } from './compiler/CompilerBackend';
 import { LatexmkBackend } from './compiler/LatexmkBackend';
+import { TectonicBackend } from './compiler/TectonicBackend';
 import { CompileOrchestrator } from './compiler/CompileOrchestrator';
 import { DiagnosticsView } from './views/DiagnosticsView';
 import { PDFPreviewView } from './views/PDFPreviewView';
@@ -38,7 +40,9 @@ import * as fs from 'fs';
 
 export default class LaTeXCompilerPlugin extends Plugin {
   settings: LaTeXPluginSettings = DEFAULT_SETTINGS;
-  private backend!: LatexmkBackend;
+  private backend!: CompilerBackend;
+  private latexmkBackend!: LatexmkBackend;
+  private tectonicBackend!: TectonicBackend;
   private orchestrator!: CompileOrchestrator;
   private projectManager!: ProjectManager;
   private statusBarItem!: StatusBarItem;
@@ -49,6 +53,18 @@ export default class LaTeXCompilerPlugin extends Plugin {
 
   constructor(app: App, manifest: PluginManifest) {
     super(app, manifest);
+  }
+
+  /**
+   * Get the plugin directory path
+   */
+  getPluginDir(): string {
+    return path.join(
+      (this.app.vault.adapter as any).basePath,
+      '.obsidian',
+      'plugins',
+      this.manifest.id
+    );
   }
 
   async onload(): Promise<void> {
@@ -64,8 +80,17 @@ export default class LaTeXCompilerPlugin extends Plugin {
     // Load settings
     await this.loadSettings();
 
+    // Initialize backends
+    const pluginDir = this.getPluginDir();
+    this.latexmkBackend = new LatexmkBackend(this.settings);
+    this.tectonicBackend = new TectonicBackend(this.settings, pluginDir);
+
+    // Select active backend based on settings
+    this.backend = this.settings.compilerBackend === 'tectonic'
+      ? this.tectonicBackend
+      : this.latexmkBackend;
+
     // Initialize components
-    this.backend = new LatexmkBackend(this.settings);
     this.orchestrator = new CompileOrchestrator(this.backend);
     this.projectManager = new ProjectManager(this.app, this.settings);
     this.fileWatcher = new FileWatcher(this.app);
@@ -201,8 +226,21 @@ export default class LaTeXCompilerPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
-    // Update components with new settings
-    this.backend.updateSettings(this.settings);
+
+    // Update backends with new settings
+    this.latexmkBackend.updateSettings(this.settings);
+    this.tectonicBackend.updateSettings(this.settings);
+
+    // Switch backend if needed
+    const newBackend = this.settings.compilerBackend === 'tectonic'
+      ? this.tectonicBackend
+      : this.latexmkBackend;
+
+    if (newBackend !== this.backend) {
+      this.backend = newBackend;
+      this.orchestrator.setBackend(newBackend);
+    }
+
     this.projectManager.updateSettings(this.settings);
   }
 
@@ -269,14 +307,16 @@ export default class LaTeXCompilerPlugin extends Plugin {
    * Compile a LaTeX project - shows folder picker if no project selected
    */
   async compileProject(): Promise<void> {
-    // Check if latexmk is available
+    // Check if backend is available
     const available = await this.orchestrator.isBackendAvailable();
-    if (!available) {
+    if (!available && this.settings.compilerBackend === 'latexmk') {
       new Notice(
         'latexmk not found. Please install TeX Live or MacTeX and configure the path in settings.'
       );
       return;
     }
+    // For Tectonic, isAvailable returns true if it can be downloaded,
+    // and the actual download happens during compilation
 
     // Find folders with .tex files
     const folders = await this.projectManager.findLatexFolders();
@@ -414,16 +454,29 @@ export default class LaTeXCompilerPlugin extends Plugin {
    * Check LaTeX installation
    */
   async checkInstallation(): Promise<void> {
-    const available = await isLatexmkAvailable(this.settings.texPath);
-
-    if (available) {
-      new Notice('LaTeX installation OK - latexmk is available');
+    if (this.settings.compilerBackend === 'tectonic') {
+      const available = await this.tectonicBackend.isAvailable();
+      if (available) {
+        const version = await this.tectonicBackend.getVersion();
+        new Notice(`Tectonic ${version || ''} is available and ready`);
+      } else {
+        new Notice(
+          'Tectonic will be downloaded automatically on first compilation.\n' +
+            'Or go to Settings to download it now.'
+        );
+      }
     } else {
-      new Notice(
-        'latexmk not found. Please install TeX Live or MacTeX.\n' +
-          'macOS: brew install --cask mactex-no-gui\n' +
-          'Then configure the TeX path in plugin settings.'
-      );
+      const available = await isLatexmkAvailable(this.settings.texPath);
+
+      if (available) {
+        new Notice('LaTeX installation OK - latexmk is available');
+      } else {
+        new Notice(
+          'latexmk not found. Please install TeX Live or MacTeX.\n' +
+            'macOS: brew install --cask mactex-no-gui\n' +
+            'Then configure the TeX path in plugin settings.'
+        );
+      }
     }
   }
 
@@ -508,14 +561,15 @@ export default class LaTeXCompilerPlugin extends Plugin {
    * Start watching a LaTeX project for file changes
    */
   async watchProject(): Promise<void> {
-    // Check if latexmk is available
+    // Check if backend is available
     const available = await this.orchestrator.isBackendAvailable();
-    if (!available) {
+    if (!available && this.settings.compilerBackend === 'latexmk') {
       new Notice(
         'latexmk not found. Please install TeX Live or MacTeX and configure the path in settings.'
       );
       return;
     }
+    // For Tectonic, isAvailable returns true if it can be downloaded
 
     // Find folders with .tex files
     const folders = await this.projectManager.findLatexFolders();
