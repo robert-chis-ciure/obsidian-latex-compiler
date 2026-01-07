@@ -95,6 +95,8 @@ export const COMMANDS = {
   SHOW_DIAGNOSTICS: 'latex-compiler:show-diagnostics',
   SHOW_LOG: 'latex-compiler:show-log',
   CHECK_INSTALLATION: 'latex-compiler:check-installation',
+  SYNCTEX_FORWARD: 'latex-compiler:synctex-forward',
+  SYNCTEX_REVERSE: 'latex-compiler:synctex-reverse',
 };
 
 export const VIEW_TYPE_PROJECTS = 'latex-projects-view';

@@ -6,6 +6,9 @@ import {
   WorkspaceLeaf,
   TFolder,
   Platform,
+  MarkdownView,
+  Editor,
+  TFile,
 } from 'obsidian';
 import {
   LaTeXPluginSettings,
@@ -35,6 +38,7 @@ import {
 } from './project/ProjectManager';
 import { isLatexmkAvailable } from './utils/platform';
 import { FileWatcher } from './utils/fileWatcher';
+import { SourceLocation } from './utils/synctex';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -50,6 +54,7 @@ export default class LaTeXCompilerPlugin extends Plugin {
   private diagnosticsView: DiagnosticsView | null = null;
   private pdfPreviewView: PDFPreviewView | null = null;
   private projectsView: ProjectsView | null = null;
+  private currentProjectRoot: string | null = null;
 
   constructor(app: App, manifest: PluginManifest) {
     super(app, manifest);
@@ -106,6 +111,10 @@ export default class LaTeXCompilerPlugin extends Plugin {
 
     this.registerView(VIEW_TYPE_PDF_PREVIEW, (leaf) => {
       this.pdfPreviewView = new PDFPreviewView(leaf);
+      // Wire up reverse search callback
+      this.pdfPreviewView.setReverseSearchCallback((location: SourceLocation) => {
+        this.navigateToSource(location);
+      });
       return this.pdfPreviewView;
     });
 
@@ -193,6 +202,21 @@ export default class LaTeXCompilerPlugin extends Plugin {
       id: 'show-projects',
       name: 'Show LaTeX Projects',
       callback: () => this.activateProjectsView(),
+    });
+
+    this.addCommand({
+      id: 'synctex-forward',
+      name: 'SyncTeX: Jump to PDF from Source',
+      editorCallback: (editor, ctx) => {
+        const view = ctx instanceof MarkdownView ? ctx : null;
+        this.syncTeXForwardSearch(editor, view);
+      },
+    });
+
+    this.addCommand({
+      id: 'synctex-reverse',
+      name: 'SyncTeX: Jump to Source from PDF',
+      callback: () => this.syncTeXReverseSearch(),
     });
 
     // Add settings tab
@@ -285,7 +309,7 @@ export default class LaTeXCompilerPlugin extends Plugin {
 
     // Show PDF preview if successful
     if (result.success && result.pdfPath) {
-      await this.showPdfPreview(result.pdfPath);
+      await this.showPdfPreview(result.pdfPath, projectPath);
     }
 
     // Show notice
@@ -535,7 +559,7 @@ export default class LaTeXCompilerPlugin extends Plugin {
   /**
    * Show PDF preview
    */
-  async showPdfPreview(pdfPath: string): Promise<void> {
+  async showPdfPreview(pdfPath: string, projectRoot?: string): Promise<void> {
     let leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_PDF_PREVIEW);
     let leaf: WorkspaceLeaf;
 
@@ -551,9 +575,14 @@ export default class LaTeXCompilerPlugin extends Plugin {
       leaf = leaves[0];
     }
 
-    // Load PDF
+    // Store current project root for SyncTeX
+    if (projectRoot) {
+      this.currentProjectRoot = projectRoot;
+    }
+
+    // Load PDF with project root for SyncTeX support
     const view = leaf.view as PDFPreviewView;
-    await view.loadPdf(pdfPath);
+    await view.loadPdf(pdfPath, projectRoot || this.currentProjectRoot || undefined);
     this.app.workspace.revealLeaf(leaf);
   }
 
@@ -671,5 +700,153 @@ export default class LaTeXCompilerPlugin extends Plugin {
     this.fileWatcher.stopAll();
     this.statusBarItem.setIdle();
     new Notice('Stopped watching all projects');
+  }
+
+  /**
+   * SyncTeX Forward Search: Jump from source to PDF location
+   */
+  private async syncTeXForwardSearch(editor: Editor, view: MarkdownView | null): Promise<void> {
+    if (!view || !view.file) {
+      new Notice('No active file');
+      return;
+    }
+
+    // Get the file path
+    const filePath = view.file.path;
+    const absolutePath = this.projectManager.toAbsolutePath(filePath);
+
+    // Check if it's a .tex file
+    if (!absolutePath.endsWith('.tex')) {
+      new Notice('SyncTeX forward search only works with .tex files');
+      return;
+    }
+
+    // Find the project this file belongs to
+    const project = this.findProjectForFile(absolutePath);
+    if (!project) {
+      new Notice('Could not find LaTeX project for this file. Compile the project first.');
+      return;
+    }
+
+    // Get current line number (1-indexed)
+    const cursor = editor.getCursor();
+    const line = cursor.line + 1;
+
+    // Ensure PDF preview is open
+    const pdfPath = path.join(
+      project.rootPath,
+      project.outputDir,
+      path.basename(project.mainFile, '.tex') + '.pdf'
+    );
+
+    if (!fs.existsSync(pdfPath)) {
+      new Notice('PDF not found. Compile the project first.');
+      return;
+    }
+
+    // Show PDF preview if not already open
+    await this.showPdfPreview(pdfPath, project.rootPath);
+
+    // Wait a bit for the view to be ready
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Perform forward search
+    if (this.pdfPreviewView) {
+      const success = this.pdfPreviewView.forwardSearch(absolutePath, line);
+      if (success) {
+        new Notice(`Jumped to PDF location for line ${line}`);
+      } else {
+        new Notice('Could not find PDF location for this line. Try recompiling.');
+      }
+    }
+  }
+
+  /**
+   * SyncTeX Reverse Search: Show instructions for jumping from PDF to source
+   */
+  private syncTeXReverseSearch(): void {
+    // This is primarily informational - actual reverse search happens via Ctrl+Click
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_PDF_PREVIEW);
+
+    if (leaves.length === 0) {
+      new Notice('Open PDF preview first, then Ctrl+Click on the PDF to jump to source');
+      return;
+    }
+
+    if (this.pdfPreviewView?.isSyncTeXAvailable()) {
+      new Notice('Ctrl+Click (Cmd+Click on Mac) on the PDF to jump to source');
+    } else {
+      new Notice('SyncTeX data not available. Recompile the project to enable.');
+    }
+  }
+
+  /**
+   * Navigate to a source file location (for reverse search)
+   */
+  private async navigateToSource(location: SourceLocation): Promise<void> {
+    try {
+      // Convert absolute path to vault-relative path
+      const vaultPath = (this.app.vault.adapter as any).basePath;
+      let relativePath = location.file;
+
+      if (location.file.startsWith(vaultPath)) {
+        relativePath = location.file.substring(vaultPath.length + 1);
+      }
+
+      // Try to find the file in the vault
+      const file = this.app.vault.getAbstractFileByPath(relativePath);
+
+      if (!file || !(file instanceof TFile)) {
+        // File might be outside vault or path resolution failed
+        new Notice(`Source file not found in vault: ${path.basename(location.file)}`);
+        return;
+      }
+
+      // Open the file
+      const leaf = this.app.workspace.getLeaf(false);
+      await leaf.openFile(file);
+
+      // Navigate to the line
+      const view = leaf.view;
+      if (view instanceof MarkdownView) {
+        const editor = view.editor;
+        // Line is 1-indexed, editor uses 0-indexed
+        const line = Math.max(0, location.line - 1);
+        editor.setCursor({ line, ch: location.column || 0 });
+        editor.scrollIntoView({ from: { line, ch: 0 }, to: { line, ch: 0 } }, true);
+      }
+
+      new Notice(`Jumped to ${path.basename(location.file)}:${location.line}`);
+    } catch (error) {
+      console.error('Failed to navigate to source:', error);
+      new Notice('Failed to navigate to source file');
+    }
+  }
+
+  /**
+   * Find the project that contains a given file
+   */
+  private findProjectForFile(filePath: string): LaTeXProjectConfig | null {
+    const projects = this.projectManager.getProjects();
+
+    for (const project of projects) {
+      // Check if file is in project root
+      if (filePath.startsWith(project.rootPath)) {
+        return project;
+      }
+    }
+
+    // Try to find by checking parent directories
+    let dir = path.dirname(filePath);
+    while (dir && dir !== path.dirname(dir)) {
+      for (const project of projects) {
+        if (project.rootPath === dir) {
+          return project;
+        }
+      }
+      dir = path.dirname(dir);
+    }
+
+    return null;
   }
 }
